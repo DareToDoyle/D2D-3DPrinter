@@ -2,7 +2,7 @@ fx_version 'adamant'
 game 'gta5'
 lua54 'yes'
 author 'DareToDoyle'
-description 'D2D-Stims'
+description 'A 3D Printing script for use in ESX FiveM'
 version '1.0'
 
 ui_page "ui/index.html"
