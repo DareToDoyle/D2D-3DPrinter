@@ -1,5 +1,3 @@
-ESX = exports["es_extended"]:getSharedObject()
-
 local pData = {}
 local isPrinterDeleted = true
 local itemData = {}
@@ -258,7 +256,13 @@ function openProgressMenu()
                 disabled = disabled,
                 arrow = true,
                 onSelect = function()
-                    TriggerServerEvent('D2D-3DPrinter:Reward', itemSpawn)
+                    if lib.callback("D2D-3DPrinter:Reward", false, itemSpawn) then
+                        lib.notify({
+                            title = D2D.Translation["3dprinter"],
+                            description = D2D.Translation["itemReceived"],
+                            type = 'success'
+                        })
+                    end
                 end,
             },
         }
