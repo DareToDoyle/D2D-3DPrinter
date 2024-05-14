@@ -1,11 +1,10 @@
-ESX = exports["es_extended"]:getSharedObject()
-
 local printer = {}
 local printerCoords = {}
 local printedObject, currentItem, rewardID, randomCoords = nil, nil, nil, nil
 local cooldowns = {}
 local cooldownTime = D2D.Printer.cooldown * 1000
 local cooldownTick = 0
+local ox_inventory = exports.ox_inventory
 
 Citizen.CreateThread(
     function()
@@ -18,14 +17,49 @@ Citizen.CreateThread(
     end
 )
 
-RegisterServerEvent("D2D-3DPrinter:requestPrinter")
-AddEventHandler(
-    "D2D-3DPrinter:requestPrinter",
-    function()
-        local playerId = source
-        TriggerClientEvent("D2D-3DPrinter:sendPrinter", playerId, printer)
+local function SpawnPropOnPrinter(printerCoords, item, data)
+    local modelhash = GetHashKey(data.prop)
+
+    printedObject = CreateObjectNoOffset(modelhash, printerCoords.x, printerCoords.y, printerCoords.z+0.18, true)
+
+    while not DoesEntityExist(printedObject) do
+        Wait(1)
     end
-)
+
+    SetEntityRotation(printedObject, -150.0, 0.0, -100.0)
+
+    SetEntityDistanceCullingRadius(printedObject, 25000.0) -- Depreciated native (use at own risk), if you know of a replacement please let me know!
+
+end
+
+local function CheckItemAmount(playerId, itemName, requiredAmount)
+    local slotIds = ox_inventory:GetSlotIdsWithItem(playerId, itemName)
+
+    if not slotIds or type(slotIds) ~= "table" then
+        print("Error: Invalid slotIds for item " .. itemName)
+        return false
+    end
+
+    local totalCount = 0
+    for _, slotId in ipairs(slotIds) do
+        local slotData = ox_inventory:GetSlot(playerId, slotId)
+        totalCount = totalCount + slotData.count
+    end
+
+    if totalCount >= requiredAmount then
+        Debug("Player has enough " .. itemName .. ": " .. totalCount)
+        return true
+    else
+        TriggerClientEvent('D2D-3DPrinter:Notifications', playerId, D2D.Translation["insufficientMaterials"])
+        return false
+    end
+end
+
+RegisterServerEvent("D2D-3DPrinter:requestPrinter")
+AddEventHandler("D2D-3DPrinter:requestPrinter", function()
+    local playerId = source
+    TriggerClientEvent("D2D-3DPrinter:sendPrinter", playerId, printer)
+end)
 
 RegisterServerEvent("D2D-3DPrinter:startCrafting")
 AddEventHandler(
@@ -48,7 +82,7 @@ AddEventHandler(
             printer.isPrinting = true
          
 
-        exports.ox_inventory:RemoveItem(source, D2D.PrinterMaterialItem, data.materialNeeded)
+        ox_inventory:RemoveItem(source, D2D.PrinterMaterialItem, data.materialNeeded)
 
         TriggerClientEvent('ToggleParticleEffect', source)
 
@@ -72,50 +106,12 @@ AddEventHandler(
             printer.canPickup = true
             printer.isPrinting = false
         end)
-    end
-)
+end)
 
-function SpawnPropOnPrinter(printerCoords, item, data)
-    local modelhash = GetHashKey(data.prop)
-
-    printedObject = CreateObjectNoOffset(modelhash, printerCoords.x, printerCoords.y, printerCoords.z+0.18, true)
-
-    while not DoesEntityExist(printedObject) do
-        Wait(1)
-    end
-
-    SetEntityRotation(printedObject, -150.0, 0.0, -100.0)
-
-    SetEntityDistanceCullingRadius(printedObject, 25000.0) -- Depreciated native (use at own risk), if you know of a replacement please let me know!
-
-end
-
-function CheckItemAmount(playerId, itemName, requiredAmount)
-    local slotIds = exports.ox_inventory:GetSlotIdsWithItem(playerId, itemName)
-
-    if not slotIds or type(slotIds) ~= "table" then
-        print("Error: Invalid slotIds for item " .. itemName)
-        return false
-    end
-
-    local totalCount = 0
-    for _, slotId in ipairs(slotIds) do
-        local slotData = exports.ox_inventory:GetSlot(playerId, slotId)
-        totalCount = totalCount + slotData.count
-    end
-
-    if totalCount >= requiredAmount then
-        Debug("Player has enough " .. itemName .. ": " .. totalCount)
-        return true
-    else
-        TriggerClientEvent('D2D-3DPrinter:Notifications', playerId, D2D.Translation["insufficientMaterials"])
-        return false
-    end
-end
 
 RegisterServerEvent("D2D-3DPrinter:refuel")
 AddEventHandler("D2D-3DPrinter:refuel", function(slotId)
-    local slotData = exports.ox_inventory:GetSlot(source, slotId)
+    local slotData = ox_inventory:GetSlot(source, slotId)
     local newBattery = nil
     Debug("Received slot ID: " .. slotId)
 
@@ -151,7 +147,7 @@ AddEventHandler("D2D-3DPrinter:refuel", function(slotId)
                 slotData.metadata.durability = slotData.metadata.durability - fuelUsed
 
                 -- Set the updated metadata back to the petrol can item
-                exports.ox_inventory:SetMetadata(source, slotId, slotData.metadata)
+                ox_inventory:SetMetadata(source, slotId, slotData.metadata)
 
                 -- Debug statement to confirm metadata update
                 Debug("Updated ammo metadata: " .. slotData.metadata.ammo)
@@ -166,29 +162,21 @@ end)
 
 local rewardGiven = false
 
-RegisterServerEvent("D2D-3DPrinter:Reward")
-AddEventHandler("D2D-3DPrinter:Reward", function(item)
-    local playerId = source
-    local itemName = item
-    local itemCount = 1
-
+lib.callback.register('D2D-3DPrinter:Reward', function(source, item)
     if not rewardGiven then
-        if exports.ox_inventory:CanCarryItem(playerId, itemName, itemCount) then
-            exports.ox_inventory:AddItem(playerId, itemName, itemCount)
+        if ox_inventory:CanCarryItem(source, item, 1) then
+            ox_inventory:AddItem(source, item, 1)
             rewardGiven = true
             DeleteEntity(printedObject)
 			printer.canPickup = false
 			printer.isPrinting = false
 			printer.canStart = true
+            return true
         else
-            TriggerClientEvent('D2D-3DPrinter:Notifications', playerId, D2D.Translation["cantcarry"])
+            TriggerClientEvent('D2D-3DPrinter:Notifications', source, D2D.Translation["cantcarry"])
         end
     else
-        print("DUPE")
-        --DropPlayer(playerId, "Stop trying to duplicate items :) ")
+        DropPlayer(source, "Stop trying to duplicate items :) ")
     end
 end)
 
-function CanCarryItem(playerId, itemName, count)
-    return exports.ox_inventory:CanCarryItem(playerId, itemName, count)
-end

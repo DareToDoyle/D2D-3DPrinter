@@ -78,7 +78,8 @@ D2D.Translation = {
    ["done"] = "Your %s has finished printing.",
    ["lowBattery"] = "You need to refuel the Printer before starting a print.",
    ["cantcarry"] = "You are too full to carry this.",
-   ["insufficientMaterials"] = "You do not have enough materials."
+   ["insufficientMaterials"] = "You do not have enough materials.",
+   ["itemReceived"] = "You have received your item!"
 }
 
 function Debug(statement)
